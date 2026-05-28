@@ -3,36 +3,30 @@ import time
 import numpy as np
 from ultralytics import YOLO
 
-# ==============================================================================
-# 1. KONFIGURASI MODEL & KELAS 
-# ==============================================================================
+
 MODEL_PATH = 'yolov8n.pt' 
 
-# Sesuaikan dengan model bola.pt kamu
+
 CLASS_ID_MERAH = 1
 CLASS_ID_HIJAU = 0
-CLASS_ID_OBSTACLE = 99 # Biarkan 99 sampai kamu sudah train rintangan
+CLASS_ID_OBSTACLE = 99 
 
 CONF_THRESHOLD = 0.35
-# Ganti dengan nama videomu, atau angka 0 kalau mau pakai webcam laptop
+
 VIDEO_SOURCE = 'video/video.mp4' 
 
-# ==============================================================================
-# 2. KONFIGURASI KALIBRASI METER & UI
-# ==============================================================================
-PIXELS_TO_METER = 0.02 # Asumsi: 1 pixel layar = 2 cm di dunia nyata
-DEADZONE_PX = 40       # Toleransi piksel sebelum kapal disuruh belok
 
-# Warna BGR (Blue, Green, Red) untuk OpenCV
+PIXELS_TO_METER = 0.02 
+DEADZONE_PX = 40      
+
+
 COLOR_RED = (0, 0, 255)
 COLOR_GREEN = (0, 255, 0)
 COLOR_CYAN = (255, 255, 0)
 COLOR_ORANGE = (0, 165, 255)
 COLOR_YELLOW = (0, 255, 255)
 
-# ==============================================================================
-# FUNGSI BANTUAN UI & RADAR BEV (Bird's Eye View)
-# ==============================================================================
+
 def draw_hud(frame, decision, count_red, count_green, count_obs, fps, koreksi_text):
     """Menggambar panel informasi di pojok kiri atas"""
     cv2.rectangle(frame, (10, 10), (320, 220), (80, 80, 80), -1)
@@ -73,7 +67,7 @@ def draw_radar_minimap(frame, red_boxes, green_boxes, obs_boxes, frame_w, frame_
     radar = np.zeros((radar_size, radar_size, 3), dtype=np.uint8)
     
     # Bikin garis melingkar biar kerasa kayak radar asli
-    pusat_radar = (radar_size // 2, radar_size - 20) # Posisi kapal kita (di bawah tengah radar)
+    pusat_radar = (radar_size // 2, radar_size - 20) 
     cv2.circle(radar, pusat_radar, 50, (50, 150, 50), 1)
     cv2.circle(radar, pusat_radar, 100, (50, 150, 50), 1)
     cv2.circle(radar, pusat_radar, 150, (50, 150, 50), 1)
@@ -83,7 +77,7 @@ def draw_radar_minimap(frame, red_boxes, green_boxes, obs_boxes, frame_w, frame_
                                        [pusat_radar[0]-7, pusat_radar[1]+5], 
                                        [pusat_radar[0]+7, pusat_radar[1]+5]])], 0, COLOR_YELLOW, -1)
 
-    # Titik batas horizon (asumsi air mulai dari sepertiga layar dari atas)
+    
     horizon_y = frame_h // 3 
 
     def map_to_radar(x_cam, y_cam):
@@ -91,33 +85,30 @@ def draw_radar_minimap(frame, red_boxes, green_boxes, obs_boxes, frame_w, frame_
         r_x = int((x_cam / frame_w) * radar_size)
         y_cam_safe = max(y_cam, horizon_y) 
         jarak_persen = (y_cam_safe - horizon_y) / (frame_h - horizon_y)
-        # Semakin dekat ke kapal, r_y makin besar nilainya
+       
         r_y = int(pusat_radar[1] - (jarak_persen * (radar_size - 40)))
         return (r_x, r_y)
 
-    # Plot Buoy Merah ke radar (pakai titik sentuh air, alias Y paling bawah)
     for box in red_boxes:
         rx, ry = map_to_radar((box[0] + box[2]) // 2, box[3])
         cv2.circle(radar, (rx, ry), 6, COLOR_RED, -1)
 
-    # Plot Buoy Hijau ke radar
+    
     for box in green_boxes:
         rx, ry = map_to_radar((box[0] + box[2]) // 2, box[3])
         cv2.circle(radar, (rx, ry), 6, COLOR_GREEN, -1)
         
-    # Plot Obstacle ke radar
+   
     for box in obs_boxes:
         rx, ry = map_to_radar((box[0] + box[2]) // 2, box[3])
         cv2.circle(radar, (rx, ry), 6, COLOR_ORANGE, -1)
 
-    # Tempelin radar ke frame video asli di pojok kanan bawah
+    
     margin = 20
     frame[frame_h - radar_size - margin : frame_h - margin, 
           frame_w - radar_size - margin : frame_w - margin] = radar
 
-# ==============================================================================
-# LOOP UTAMA PROGRAM
-# ==============================================================================
+
 def main():
     model = YOLO(MODEL_PATH)
     cap = cv2.VideoCapture(VIDEO_SOURCE)
@@ -157,7 +148,7 @@ def main():
                 if cls_id == CLASS_ID_MERAH:
                     center = draw_bbox_with_label(frame, coords, "red", conf, COLOR_RED)
                     red_centers.append(center)
-                    red_raw_boxes.append(coords) # Simpan box mentah buat radar
+                    red_raw_boxes.append(coords) 
                 elif cls_id == CLASS_ID_HIJAU:
                     center = draw_bbox_with_label(frame, coords, "green", conf, COLOR_GREEN)
                     green_centers.append(center)
@@ -166,9 +157,7 @@ def main():
                     draw_bbox_with_label(frame, coords, "obstacle", conf, COLOR_ORANGE)
                     obs_raw_boxes.append(coords)
 
-        # =========================================================
-        # LOGIKA MIDPOINT & INSTRUKSI NAVIGASI
-        # =========================================================
+        
         decision = "FORWARD"
         koreksi_hud = ""
         banner_text = ""
@@ -182,11 +171,11 @@ def main():
         cv2.circle(frame, (frame_center_x, frame_center_y), 8, COLOR_YELLOW, -1)
 
         if red_centers and green_centers:
-            # Ambil buoy yang paling dekat (Y paling besar)
+            
             nearest_red = max(red_centers, key=lambda b: b[1])
             nearest_green = max(green_centers, key=lambda b: b[1])
 
-            # Titik tengah lintasan
+           
             mid_x = (nearest_red[0] + nearest_green[0]) // 2
             mid_y = (nearest_red[1] + nearest_green[1]) // 2
             midpoint = (mid_x, mid_y)
@@ -205,7 +194,7 @@ def main():
             cv2.rectangle(frame, (mid_x + 15, mid_y - th - 5), (mid_x + 15 + tw, mid_y + 5), (0,0,0), -1)
             cv2.putText(frame, text_mid, (mid_x + 15, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLOR_CYAN, 2)
 
-            # Kalkulasi Jarak Offset
+            # Jarak Offset
             offset_px = mid_x - frame_center_x
             offset_m = abs(offset_px) * PIXELS_TO_METER
             offset_real_m = offset_px * PIXELS_TO_METER 
@@ -222,16 +211,16 @@ def main():
                 decision = "FORWARD"
                 koreksi_hud = "Koreksi : LURUS (Jalur Aman)"
 
-        # Override kalau ada rintangan
+       
         if len(obs_raw_boxes) > 0:
             decision = "AVOID/STOP"
             banner_text = "!!! BAHAYA OBSTACLE - HENTIKAN KAPAL !!!"
 
-        # --- MENGGAMBAR UI AKHIR ---
+        
         draw_hud(frame, decision, len(red_centers), len(green_centers), len(obs_raw_boxes), fps, koreksi_hud)
         draw_radar_minimap(frame, red_raw_boxes, green_raw_boxes, obs_raw_boxes, frame_w, frame_h)
 
-        # Gambar Banner Hitam Besar di Bawah
+        
         if banner_text:
             (tw, th), _ = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
             banner_x = (frame_w - tw) // 2
@@ -244,15 +233,15 @@ def main():
             (tw2, _), _ = cv2.getTextSize(offset_detail, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
             cv2.putText(frame, offset_detail, ((frame_w - tw2) // 2, banner_y + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        # Tampilkan Jendela Kamera
+        
         cv2.imshow(window_name, frame)
 
-        # Kontrol Keyboard
+      
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'): 
             break
         elif key == ord('p'): 
-            cv2.waitKey(0) # Tekan 'P' buat nge-pause videonya (tekan tombol lain buat lanjut)
+            cv2.waitKey(0)
 
     cap.release()
     cv2.destroyAllWindows()
