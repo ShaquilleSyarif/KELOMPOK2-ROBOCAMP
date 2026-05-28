@@ -6,7 +6,7 @@ from ultralytics import YOLO
 # ==============================================================================
 # 1. KONFIGURASI MODEL & KELAS 
 # ==============================================================================
-MODEL_PATH = 'model_asv_2024/bola.pt' 
+MODEL_PATH = 'yolov8n.pt' 
 
 # Sesuaikan dengan model bola.pt kamu
 CLASS_ID_MERAH = 1
